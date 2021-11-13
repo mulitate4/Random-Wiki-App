@@ -1,15 +1,16 @@
 // ignore_for_file: avoid_print
 
 // todo
-// - Add Swipe down to refresh
 // - Change theme to dark mode
 // - Add an option for simple.wiki (?)
+// - Allow query input
 
 import 'dart:convert';
 import 'dart:math';
 
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/material.dart';
+import 'package:pull_to_refresh/pull_to_refresh.dart';
 import 'package:http/http.dart' as http;
 
 class WikiArticle {
@@ -37,6 +38,17 @@ class _ArticlesPageState extends State<ArticlesPage> {
   List articleIDs = [];
   late Future<List<WikiArticle>> _articles;
   String urlSeperator = "%7C";
+  final RefreshController _refreshController = RefreshController();
+  final List<String> _excludeList = [
+    "Talk",
+    "User talk",
+    "User",
+    "Wikipedia",
+    "Category",
+    "File",
+    "Portal",
+    "Category talks"
+  ];
 
   // ================ //
   // HELPER FUNCTIONS //
@@ -48,7 +60,7 @@ class _ArticlesPageState extends State<ArticlesPage> {
     List<int> randomIds = [];
     Random random = Random();
 
-    for (int i = 1; i <= 20; i++) {
+    for (int i = 1; i <= 30; i++) {
       int id = random.nextInt(21529208);
       randomIds.add(id);
     }
@@ -61,23 +73,26 @@ class _ArticlesPageState extends State<ArticlesPage> {
   Future<List<WikiArticle>> getArticles() async {
     List<int> ids = getRandomIds();
     String concatenatedIds = ids.join(urlSeperator);
-
-    Uri url = Uri.parse(
-        "https://en.wikipedia.org/w/api.php?action=query&format=json&pageids=$concatenatedIds");
-    http.Response response = await http.get(url);
-    Map data = json.decode(response.body);
-    Map pages = data["query"]["pages"];
-
     List<WikiArticle> articles = [];
 
-    // Serialize the JSON data into <WikiArticle>
-    pages.forEach((key, value) {
-      if (value.containsKey("title")) {
-        WikiArticle article =
-            WikiArticle(pageID: value["pageid"], title: value["title"]);
-        articles.add(article);
-      }
-    });
+    while (articles.length < 10) {
+      Uri url = Uri.parse(
+          "https://en.wikipedia.org/w/api.php?action=query&format=json&pageids=$concatenatedIds");
+      http.Response response = await http.get(url);
+      Map data = json.decode(response.body);
+      Map pages = data["query"]["pages"];
+
+      // Serialize the JSON data into <WikiArticle>
+      pages.forEach((key, value) {
+        if (value.containsKey("title")) {
+          if (!_excludeList.contains(value["title"].split(":")[0])) {
+            WikiArticle article =
+                WikiArticle(pageID: value["pageid"], title: value["title"]);
+            articles.add(article);
+          }
+        }
+      });
+    }
 
     return articles;
   }
@@ -109,40 +124,44 @@ class _ArticlesPageState extends State<ArticlesPage> {
       appBar: AppBar(
         actions: [
           IconButton(
-              onPressed: () async {
+              onPressed: () {
                 refreshArticles();
               },
               icon: const Icon(Icons.refresh))
         ],
-        title: const Text("Articles"),
+        title: const Text("Wiki Random"),
       ),
       body: FutureBuilder<List<WikiArticle>>(
         future: _articles,
         builder: (context, snapshot) {
-          // List<Widget> children;
           if (snapshot.hasData) {
-            return ListView.builder(
-                itemCount: snapshot.data!.length,
-                itemBuilder: (context, index) {
-                  return Card(
-                    child: ListTile(
-                      title: Text(snapshot.data![index].title),
-                      onTap: () async {
-                        int articlePageId = snapshot.data![index].pageID;
-                        String wikiUrl =
-                            "http://en.wikipedia.org/?curid=$articlePageId";
-                        print(await canLaunch(wikiUrl));
-                        if (await canLaunch(wikiUrl)) {
-                          await launch(wikiUrl);
-                        }
-                      },
-                    ),
-                  );
-                });
+            _refreshController.refreshCompleted();
+            return SmartRefresher(
+                onRefresh: () {
+                  refreshArticles();
+                },
+                controller: _refreshController,
+                child: ListView.builder(
+                    itemCount: snapshot.data!.length,
+                    itemBuilder: (context, index) {
+                      return Card(
+                        child: ListTile(
+                          title: Text(snapshot.data![index].title),
+                          onTap: () async {
+                            int articlePageId = snapshot.data![index].pageID;
+                            String wikiUrl =
+                                "http://en.wikipedia.org/?curid=$articlePageId";
+                            if (await canLaunch(wikiUrl)) {
+                              await launch(wikiUrl);
+                            }
+                          },
+                        ),
+                      );
+                    }));
           } else if (snapshot.hasError) {
             return const Text("An Error Occured, Please, try again.");
           }
-          return const CircularProgressIndicator();
+          return const Center(child: CircularProgressIndicator());
         },
       ),
     );
