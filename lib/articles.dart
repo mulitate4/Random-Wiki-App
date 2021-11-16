@@ -1,8 +1,6 @@
 // ignore_for_file: avoid_print
 
 // todo
-// - Change theme to dark mode
-// - Add an option for simple.wiki (?)
 // - Allow query input
 
 import 'dart:convert';
@@ -47,7 +45,13 @@ class _ArticlesPageState extends State<ArticlesPage> {
     "Category",
     "File",
     "Portal",
-    "Category talks"
+    "Category",
+    "Category talk",
+    "Template talk",
+    "Template",
+    "File talk",
+    "User talk",
+    "Wikipedia talk"
   ];
 
   // ================ //
@@ -71,11 +75,12 @@ class _ArticlesPageState extends State<ArticlesPage> {
   // Get a Promise/Future with
   // List of WikiPedia Articles
   Future<List<WikiArticle>> getArticles() async {
-    List<int> ids = getRandomIds();
-    String concatenatedIds = ids.join(urlSeperator);
     List<WikiArticle> articles = [];
 
     while (articles.length < 10) {
+      List<int> ids = getRandomIds();
+      String concatenatedIds = ids.join(urlSeperator);
+
       Uri url = Uri.parse(
           "https://en.wikipedia.org/w/api.php?action=query&format=json&pageids=$concatenatedIds");
       http.Response response = await http.get(url);
@@ -131,38 +136,47 @@ class _ArticlesPageState extends State<ArticlesPage> {
         ],
         title: const Text("Wiki Random"),
       ),
-      body: FutureBuilder<List<WikiArticle>>(
-        future: _articles,
-        builder: (context, snapshot) {
-          if (snapshot.hasData) {
-            _refreshController.refreshCompleted();
-            return SmartRefresher(
-                onRefresh: () {
-                  refreshArticles();
-                },
-                controller: _refreshController,
-                child: ListView.builder(
-                    itemCount: snapshot.data!.length,
-                    itemBuilder: (context, index) {
-                      return Card(
-                        child: ListTile(
-                          title: Text(snapshot.data![index].title),
-                          onTap: () async {
-                            int articlePageId = snapshot.data![index].pageID;
-                            String wikiUrl =
-                                "http://en.wikipedia.org/?curid=$articlePageId";
-                            if (await canLaunch(wikiUrl)) {
-                              await launch(wikiUrl);
-                            }
-                          },
-                        ),
-                      );
-                    }));
-          } else if (snapshot.hasError) {
-            return const Text("An Error Occured, Please, try again.");
-          }
-          return const Center(child: CircularProgressIndicator());
-        },
+      body: Padding(
+        padding: const EdgeInsets.fromLTRB(0, 8.0, 0, 8.0),
+        child: FutureBuilder<List<WikiArticle>>(
+          future: _articles,
+          builder: (context, snapshot) {
+            if (snapshot.hasData) {
+              _refreshController.refreshCompleted();
+              return SmartRefresher(
+                  onRefresh: () {
+                    refreshArticles();
+                  },
+                  controller: _refreshController,
+                  child: ListView.builder(
+                      itemCount: snapshot.data!.length,
+                      itemBuilder: (context, index) {
+                        return Padding(
+                          padding:
+                              const EdgeInsets.fromLTRB(10.0, 2.0, 10.0, 2.0),
+                          child: Card(
+                            child: ListTile(
+                              title: Text(snapshot.data![index].title),
+                              onTap: () async {
+                                int articlePageId =
+                                    snapshot.data![index].pageID;
+                                String wikiUrl =
+                                    "http://en.wikipedia.org/?curid=$articlePageId";
+                                if (await canLaunch(wikiUrl)) {
+                                  await launch(wikiUrl);
+                                }
+                              },
+                            ),
+                          ),
+                        );
+                      }));
+            } else if (snapshot.hasError) {
+              return const Center(
+                  child: Text("An Error Occured, Please, try again."));
+            }
+            return const Center(child: CircularProgressIndicator());
+          },
+        ),
       ),
     );
   }
